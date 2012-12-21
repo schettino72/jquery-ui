@@ -3,7 +3,9 @@ module.exports = function( grunt ) {
 "use strict";
 
 var path = require( "path" ),
-	fs = require( "fs" );
+	fs = require( "fs" ),
+	// support: node <0.8
+	existsSync = fs.existsSync || path.existsSync;
 
 grunt.registerTask( "manifest", "Generate jquery.json manifest files", function() {
 	var pkg = grunt.config( "pkg" ),
@@ -121,28 +123,11 @@ grunt.registerMultiTask( "copy", "Copy files to destination folder and replace @
 
 
 grunt.registerMultiTask( "zip", "Create a zip file for release", function() {
-	// TODO switch back to adm-zip for better cross-platform compability once it actually works
-	// 0.1.3 works, but result can't be unzipped
-	// its also a lot slower then zip program, probably due to how its used...
-	// var files = grunt.file.expandFiles( "dist/" + this.file.src + "/**/*" );
-	// grunt.log.writeln( "Creating zip file " + this.file.dest );
-
-	//var AdmZip = require( "adm-zip" );
-	//var zip = new AdmZip();
-	//files.forEach(function( file ) {
-	//	grunt.verbose.writeln( "Zipping " + file );
-	//	// rewrite file names from dist folder (created by build), drop the /dist part
-	//	zip.addFile(file.replace(/^dist/, "" ), fs.readFileSync( file ) );
-	//});
-	//zip.writeZip( "dist/" + this.file.dest );
-	//grunt.log.writeln( "Wrote " + files.length + " files to " + this.file.dest );
-
 	var done = this.async(),
-		dest = this.file.dest,
-		src = grunt.template.process( this.file.src, grunt.config() );
-	grunt.utils.spawn({
+		dest = this.data.dest;
+	grunt.util.spawn({
 		cmd: "zip",
-		args: [ "-r", dest, src ],
+		args: [ "-r", dest, this.data.src ],
 		opts: {
 			cwd: 'dist'
 		}
@@ -159,7 +144,7 @@ grunt.registerMultiTask( "zip", "Create a zip file for release", function() {
 
 grunt.registerMultiTask( "md5", "Create list of md5 hashes for CDN uploads", function() {
 	// remove dest file before creating it, to make sure itself is not included
-	if ( path.existsSync( this.file.dest ) ) {
+	if ( existsSync( this.file.dest ) ) {
 		fs.unlinkSync( this.file.dest );
 	}
 	var crypto = require( "crypto" ),
@@ -197,23 +182,23 @@ grunt.registerTask( "generate_themes", function() {
 	});
 
 	done = this.async();
-	grunt.utils.async.forEach( download.themeroller.gallery(), function( theme, done ) {
+	grunt.util.async.forEach( download.themeroller.gallery(), function( theme, done ) {
 		var folderName = theme.folderName(),
 			concatTarget = "css-" + folderName,
 			cssContent = theme.css(),
 			cssFolderName = target + "themes/" + folderName + "/",
 			cssFileName = cssFolderName + "jquery.ui.theme.css",
-			cssFiles = grunt.config.get( "concat.css.src" )[ 1 ].slice();
+			cssFiles = grunt.config.get( "concat.css.src" ).slice();
 
 		grunt.file.write( cssFileName, cssContent );
 
 		// get css components, replace the last file with the current theme
 		cssFiles.splice(-1);
-		cssFiles.push( "<strip_all_banners:" + cssFileName + ">" );
-		grunt.config.get( "concat" )[ concatTarget ] = {
-			src: [ "<banner:meta.bannerCSS>", cssFiles ],
+		cssFiles.push( cssFileName );
+		grunt.config.set( "concat." + concatTarget, {
+			src: cssFiles,
 			dest: cssFolderName + "jquery-ui.css"
-		};
+		});
 		grunt.task.run( "concat:" + concatTarget );
 
 		theme.fetchImages(function( err, files ) {
